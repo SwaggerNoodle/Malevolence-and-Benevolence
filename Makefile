@@ -4,7 +4,7 @@ OBJECTS=main.o
 
 CC=gcc
 CFLAGS=-Wall -I/mingw64/include
-LDFLAGS=-L/mingw64/lib -lSDL3 -mwindows
+LDFLAGS=-L/mingw64/lib -lSDL3 -lopengl32 -mwindows
 
 
 all: $(PROGRAM)
