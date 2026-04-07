@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -11,8 +12,10 @@ typedef struct InputState {
 	bool key_s;
 	bool key_d;
 
-	bool mouse_left;
-	bool mouse_right;
+	bool mouse_left_pressed;
+	bool mouse_right_pressed;
+	bool mouse_left_released;
+	bool mouse_right_released;
 
 	int mouse_x;
 	int mouse_y;
@@ -50,6 +53,8 @@ typedef struct GameState {
 	InputState input;
 	Camera camera;
 
+	bool hand_holding_villager;
+
 	WorldObject temple;
 	WorldObject villager;
 } GameState;
@@ -63,6 +68,8 @@ static void processEvents(GameState *game){
 
 	game->input.mouse_delta_x = 0;
 	game->input.mouse_delta_y = 0;
+	game->input.mouse_left_pressed = false;
+	game->input.mouse_right_pressed = false;
 
 	while (SDL_PollEvent(&event)){
 		switch (event.type){
@@ -114,10 +121,12 @@ static void processEvents(GameState *game){
 				switch (event.button.button){
 
 					case SDL_BUTTON_LEFT:
-						game->input.mouse_left = true;
+						game->input.mouse_left_pressed = true;
+						game->input.mouse_left_released = false;
 						break;
 					case SDL_BUTTON_RIGHT:
-						game->input.mouse_right = true;
+						game->input.mouse_right_pressed = true;
+						game->input.mouse_right_released = false;
 						break;
 				}
 				break;
@@ -125,10 +134,12 @@ static void processEvents(GameState *game){
 				switch (event.button.button){
 
 					case SDL_BUTTON_LEFT:
-						game->input.mouse_left = false;
+						game->input.mouse_left_pressed = false;
+						game->input.mouse_left_released = true;
 						break;
 					case SDL_BUTTON_RIGHT:
-						game->input.mouse_right = false;
+						game->input.mouse_right_pressed = false;
+						game->input.mouse_right_released = true;
 						break;
 				}
 				break;
@@ -136,11 +147,77 @@ static void processEvents(GameState *game){
 	}
 }
 
+static bool projectWorldToScreen(GameState *game, float wx, float wy, float wz, int *screen_x, int *screen_y){
+	int pixel_w;
+	int pixel_h;
+	float aspect;
+	float pitch_rad;
+	float x;
+	float y;
+	float z;
+	float view_x;
+	float view_y;
+	float view_z;
+	float ndc_x;
+	float ndc_y;
+
+	if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)){
+		pixel_w = game->window_width;
+		pixel_h = game->window_height;
+	}
+	if (pixel_h <= 0){
+		pixel_h = 1;
+	}
+	aspect = (float)pixel_w / (float)pixel_h;
+	pitch_rad = game->camera.pitch * (3.14159265f / 180.0F);
+
+	//Move into camera-relative space
+	x = wx - game->camera.x;
+	y = wy - game->camera.y;
+	z = wz - game->camera.z;
+
+	//Match the same x-axis rotation used in render()
+	view_x = x;
+	view_y = y *cosf(pitch_rad) + z * sinf(pitch_rad);
+	view_z = -y *sinf(pitch_rad) + z * cosf(pitch_rad);
+
+	//Match the fixed camera pull-back in render()
+	view_z -= 28.0f;
+
+	//If too close or behind camera, do not project
+	if (view_z >= -0.1f){
+		return false;
+	}
+
+
+	/*
+	 * render() uses:
+	 * - near_clip = 0.1f
+	 * - half_top  = 0.1f
+	 * - half_right = aspect * 0.1f
+	 *
+	 * That simplifies the perspective divide to:
+	 */
+	ndc_x = view_x / (aspect * -view_z);
+	ndc_y = view_y / (-view_z);
+
+	*screen_x = (int)((ndc_x * 0.5f + 0.5f) * (float)pixel_w);
+	*screen_y = (int)((1.0f - (ndc_y * 0.5f + 0.5f)) * (float)pixel_h);
+
+	return true;
+}
+
 
 
 static void update(GameState *game){
 	float camera_speed = 10.0f;
+	int villager_screen_x;
+	int villager_screen_y;
+	int dx;
+	int dy;
+	float drag_scale = 0.08f;
 
+	//Camera movement
 	if (game->input.key_w){
 		game->camera.y += camera_speed * game->delta;
 	}
@@ -152,6 +229,39 @@ static void update(GameState *game){
 	}
 	if (game->input.key_d){
 		game->camera.x += camera_speed * game->delta;
+	}
+
+	//Villager pickup on left click
+	if (!game->hand_holding_villager && game->input.mouse_left_pressed){
+		if (projectWorldToScreen(
+					game,
+					game->villager.x,
+					game->villager.y,
+					game->villager.z,
+					&villager_screen_x,
+					&villager_screen_y)){
+			dx = game->input.mouse_x - villager_screen_x;
+			dy = game->input.mouse_y - villager_screen_y;
+
+			//Square click area around villager
+			if (dx > -40 && dx < 40 && dy > -40 && dy < 40){
+				game->hand_holding_villager = true;
+			}
+		}
+	}
+	//If villager held, can drag around
+	if (game->hand_holding_villager){
+		game->villager.x += (float)game->input.mouse_delta_x * drag_scale;
+		game->villager.y -= (float)game->input.mouse_delta_y * drag_scale;
+
+		//lift villager while held
+		game->villager.z = 3.0f;
+
+		//Drop villager on release
+		if (game->input.mouse_left_released){
+			game->hand_holding_villager = false;
+			game->villager.z = 0.5f;
+		}
 	}
 }
 
@@ -294,17 +404,30 @@ static void render(GameState *game){
 		);
 
 	//Villager Marker
-	drawCube(
-		game->villager.x,
-		game->villager.y,
-		game->villager.z,
-		game->villager.size_x,
-		game->villager.size_y,
-		game->villager.size_z,
-		1.00f, 0.90f, 0.25f
-		);
+	if (game->hand_holding_villager){
+		drawCube(
+			game->villager.x,
+			game->villager.y,
+			game->villager.z,
+			game->villager.size_x,
+			game->villager.size_y,
+			game->villager.size_z,
+			1.00f, 0.40f, 0.25f
+			);
+	}
+	else {
+		drawCube(
+			game->villager.x,
+			game->villager.y,
+			game->villager.z,
+			game->villager.size_x,
+			game->villager.size_y,
+			game->villager.size_z,
+			1.00f, 0.90f, 0.25f
+			);
 
 	SDL_GL_SwapWindow(game->window);
+	}
 }
 
 
