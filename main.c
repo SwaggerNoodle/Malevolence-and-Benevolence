@@ -6,11 +6,34 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_opengl.h>
 
+#define MAX_VILLAGERS 32
+#define MAX_WORK_SITES 16
+
+typedef enum VillagerState {
+	VILLAGER_IDLE = 0,
+	VILLAGER_HELD,
+	VILLAGER_WALKING_TO_TARGET,
+	VILLAGER_WORKING
+} VillagerState;
+typedef enum VillagerJob {
+	JOB_NONE = 0;
+	JOB_GATHER_FOOD,
+	JOB_WORSHIP
+} VillagerJob;
+typedef enum WorkSiteType {
+	SITE_FOOD = 0;
+	SITE_WORSHIP
+} WorkSiteType;
+
+
 typedef struct InputState {
 	bool key_w;
 	bool key_a;
 	bool key_s;
 	bool key_d;
+	
+	bool mouse_left_down;
+	bool mouse_right_down;
 
 	bool mouse_left_pressed;
 	bool mouse_right_pressed;
@@ -38,6 +61,44 @@ typedef struct WorldObject {
 	float size_z;
 } WorldObject;
 
+
+typedef struct Villager {
+	float x;
+	float y;
+	float z;
+
+	float size_x;
+	float size_y;
+	float size_z;
+
+	float target_x;
+	float target_y;
+	float target_z;
+	
+	float move_speed;
+
+	float work_timer;
+
+	VillagerState state;
+	VillagerJob job;
+
+	int target_site_index;
+	bool active;
+} Villager;
+typedef struct WorkSite {
+	float x;
+	float y;
+	float z;
+	
+	float size_x;
+	float size_y;
+	float size_z;
+
+	WorkSiteType type;
+	bool active;
+
+	float work_progress;
+
 typedef struct GameState {
 	bool running;
 	
@@ -53,13 +114,54 @@ typedef struct GameState {
 	InputState input;
 	Camera camera;
 
-	bool hand_holding_villager;
-
 	WorldObject temple;
-	WorldObject villager;
+
+	Villager villagers [MAX_VILLAGERS];
+	int villager_count;
+	int held_villager_index;
+
+	WorkSite work_sites[MAX_WORK_SITES];
+	int work_site_count;
+
+	int food_amount;
+	int belief_amount;
 } GameState;
 
 
+static void initVillager(Villager *villager, float x, float y){
+	villager->x = x;
+	villager->y = y;
+	villager->z = 0.5f;
+
+	villager->size_x = 0.8f;
+	villager->size_y = 0.8f;
+	villager->size_z = 1.0f;
+
+	villager->target_x = x;
+	villager->target_y = y;
+	villager->target_z = 0.5f;
+
+	villager->move_speed = 4.0f;
+	villager->work_timer = 0.0f;
+
+	villager->state = VILLAGER_IDLE;
+	villager->job = JOB_NONE;
+	villager->target_site_index = -1;
+	villager->active = true;
+}
+static void initWorkSite(WorkSite *site, float x, float y, WorkSiteType){
+	site->x = x;
+	site->y = y;
+	site->z = 0.5f;
+
+	site->size_x = 2.0f;
+	site->size_y = 2.0f;
+	site->size_z = 1.0f;
+
+	site->type = type;
+	site->active = true;
+	site->work_progress = 0.0f;
+}
 
 
 static void processEvents(GameState *game){
@@ -70,6 +172,8 @@ static void processEvents(GameState *game){
 	game->input.mouse_delta_y = 0;
 	game->input.mouse_left_pressed = false;
 	game->input.mouse_right_pressed = false;
+	game->input.mouse_left_released = false;
+	game->input.mouse_right_released = false;
 
 	while (SDL_PollEvent(&event)){
 		switch (event.type){
@@ -122,11 +226,11 @@ static void processEvents(GameState *game){
 
 					case SDL_BUTTON_LEFT:
 						game->input.mouse_left_pressed = true;
-						game->input.mouse_left_released = false;
+						game->input.mouse_left_down = true;
 						break;
 					case SDL_BUTTON_RIGHT:
 						game->input.mouse_right_pressed = true;
-						game->input.mouse_right_released = false;
+						game->input.mouse_right_down = true;
 						break;
 				}
 				break;
@@ -134,11 +238,11 @@ static void processEvents(GameState *game){
 				switch (event.button.button){
 
 					case SDL_BUTTON_LEFT:
-						game->input.mouse_left_pressed = false;
+						game->input.mouse_left_down = false;
 						game->input.mouse_left_released = true;
 						break;
 					case SDL_BUTTON_RIGHT:
-						game->input.mouse_right_pressed = false;
+						game->input.mouse_right_down = false;
 						game->input.mouse_right_released = true;
 						break;
 				}
@@ -205,6 +309,148 @@ static bool projectWorldToScreen(GameState *game, float wx, float wy, float wz, 
 	*screen_y = (int)((1.0f - (ndc_y * 0.5f + 0.5f)) * (float)pixel_h);
 
 	return true;
+}
+
+
+static void findClickedVillager(GameState *game, int mouse_x, int mouse_y){
+	int i;
+	int best_index = -1;
+	int best_dist2 = 0x7fffffff;
+	
+	for (i = 0; game->villager_count; i++){
+		int screen_x;
+		int screen_y;
+		int dx;
+		int dy;
+		int dist2;
+
+		if (!game->villagers[i].active){
+			continue;
+		}
+		if (!projectWorldToScreen(game,
+					  game->villagers[i].x,
+					  game->villagers[i].y,
+					  game->villagers[i].z,
+					  &screen_x,
+					  &screen_y)){
+			continue;
+		}
+		dx = mouse_x - screen_x;
+		dy = mouse_y - screen_y;
+
+		if (dx > -40 && dx < 40 && dy > -40 && dy < 40){
+			dist2 = dx * dx + dy * dy;
+			if (dist2 < best_dist2){
+				best_dist2 = dist2;
+				best_index = i;
+			}
+		}
+	}
+	return best_index = i;
+}
+static int findWorkSiteAtScreenPos(Gamestate *game, int mouse_x, int mouse_y){
+	int i;
+	int best_index = -1;
+	int best_dist2 = 0x7fffffff;
+
+	for (i = 0; i < game->work_site_count; i++){
+		int screen_x;
+		int screen_y;
+		int dx;
+		int dy;
+		int dist2;
+
+		if (!game->work_site[i].active){
+			continue;
+		}
+		if (!projectWorldToScreen(game,
+					  game->work_sites[i].x,
+					  game->work_sites[i].y,
+					  game->work_sites[i].z,
+					  &screen_x,
+					  &screen_y)){
+			coninue;
+		}
+
+		dx = mouse_x - screen_x;
+		dy = mouse_y - screen_y;
+
+		if (dx > -45 && dx < 45 && dy > -45 && dy < 45){
+			dist2 = dx * dx + dy * dy;
+			if (dist2 < best_dist2){
+				best_dist2 = dist2;
+				best_index = i;
+			}
+		}
+	}
+	return best_index;
+}
+
+
+static void assignVillagerToSite(GameState *game, int villager_index, int site_index){
+	Villager *villager;
+	WorkSite *site;
+
+	if (villager_index < 0 || Villager_index >= game->villager_count){
+		return;
+	}
+	if (site_index < 0 || site_index >= game->work_site_count){
+		return;
+	}
+
+	villager = &game->villagers[villager_index];
+	site = &game->work_sites[site_index];
+
+	if (!villager->active || !site->active){
+		return;
+	}
+
+	villager->target_x = site->x;
+	villager->target_y = site->y;
+	villager->targey_z = 0.5f;
+	villager->target_site_index = site_index;
+	villager->work_timer = 0.0f;
+	villager->z = 0.5f;
+	villager->state = VILLAGER_WALKING_TO_TARGET;
+
+	switch (site->type){
+		case SITE_FOOD:
+			villager->job = JOB_GATHER_FOOD;
+			break;
+		case SITE_WORSHIP:
+			villager->job = JOB_WORSHIP;
+			break;
+	}
+}
+static void updateWalkingVillager(GameState *game, Villager *villager){
+	float dx;
+	float dy;
+	float dist;
+	float nx;
+	float ny;
+
+	(void)game;
+
+	dx = villager->target_x - villager->x;
+	dy = villager->target_y - villager->y;
+	dist = sqrtf(dx * dx + dy * dy);
+
+	villager->z = 0.5f;
+
+	if (dist > 0.05f){
+		nx = dx / dist;
+		ny = dy / dist;
+
+		villager->x += nx * villager->move_speed * game->delta;
+		villager->y += ny * villager->move_speed * game->delta;
+	}
+	else {
+		villager->x = villager->target_x;
+		villager->y = villager->target_y;
+		villager->z = 0.5f;
+		villager->state = VILLAGER_WORKING;
+		villager->work_timer = 0.0f;
+	}
 }
 
 
@@ -425,9 +671,8 @@ static void render(GameState *game){
 			game->villager.size_z,
 			1.00f, 0.90f, 0.25f
 			);
-
-	SDL_GL_SwapWindow(game->window);
 	}
+	SDL_GL_SwapWindow(game->window);
 }
 
 
