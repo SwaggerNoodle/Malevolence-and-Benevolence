@@ -1,5 +1,5 @@
 PROGRAM=Malevolence_and_Benevolence.exe
-OBJECTS=main.o
+OBJECTS=main.o rendering.o helpers.o
 SHADERS=shader.vert.spv shader.frag.spv
 
 
@@ -9,13 +9,21 @@ LDFLAGS=-L/mingw64/lib -lSDL3 -lvulkan-1 -lm -mwindows
 
 GLSLC=glslc
 
+
+
 all: $(PROGRAM) $(SHADERS)
 
 $(PROGRAM): $(OBJECTS)
 	$(CC) -o $(PROGRAM) $(OBJECTS) $(LDFLAGS)
 
-main.o: main.c
+main.o: main.c game.h common.h rendering.h helpers.h
 	$(CC) $(CFLAGS) -c main.c
+
+rendering.o: rendering.c rendering.h helpers.h game.h common.h
+	$(CC) $(CFLAGS) -c rendering.c
+
+helpers.o: helpers.c helpers.h game.h common.h rendering.h
+	$(CC) $(CFLAGS) -c helpers.c
 
 shader.vert.spv: shader.vert
 	$(GLSLC) shader.vert -o shader.vert.spv
