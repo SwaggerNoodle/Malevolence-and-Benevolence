@@ -104,19 +104,21 @@ bool projectWorldToScreen(GameState *game,
 
 
 void buildCameraMatrix(GameState *game, CameraUBO *ubo){
-    float proj[16];
-    float rot[16];
-    float trans[16];
-    float view[16];
-    float aspect = (float)game->vk.swapchain_extent.width / (float)game->vk.swapchain_extent.height;
-    float pitch_rad = game->camera.pitch * (3.14159265f / 180.0f);
+	float proj[16];
+	float rot[16];
+	float trans[16];
+	float view[16];
+	float aspect = (float)game->vk.swapchain_extent.width / (float)game->vk.swapchain_extent.height;
+	float pitch_rad = game->camera.pitch * (3.14159265f / 180.0f);
 
-    Helper_mat4Perspective(proj, 60.0f * (3.14159265f / 180.0f), aspect, 0.1f, 100.0f);
-    Helper_mat4RotateX(rot, pitch_rad);
-    Helper_mat4Translate(trans, -game->camera.x, -game->camera.y, -game->camera.z);
+	Helper_mat4Perspective(proj, 60.0f * (3.14159265f / 180.0f), aspect, 0.1f, 100.0f);
+	proj[5] *= -1.0f; //OpenGL to Vulkan translation bandaid
 
-    Helper_mat4Multiply(view, rot, trans);
-    Helper_mat4Multiply(ubo->view_proj, proj, view);
+	Helper_mat4RotateX(rot, pitch_rad);
+	Helper_mat4Translate(trans, -game->camera.x, -game->camera.y, -game->camera.z);
+
+	Helper_mat4Multiply(view, rot, trans);
+	Helper_mat4Multiply(ubo->view_proj, proj, view);
 }
 
 

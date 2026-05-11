@@ -392,8 +392,8 @@ static void updateWindowTitle(GameState *game){
 static void update(GameState *game){
 	const float camera_speed = 10.0f;
 
-	if (game->input.key_w){ game->camera.y += camera_speed * game->delta; }
-	if (game->input.key_s){ game->camera.y -= camera_speed * game->delta; }
+	if (game->input.key_w){ game->camera.y -= camera_speed * game->delta; }
+	if (game->input.key_s){ game->camera.y += camera_speed * game->delta; }
 	if (game->input.key_a){ game->camera.x -= camera_speed * game->delta; }
 	if (game->input.key_d){ game->camera.x += camera_speed * game->delta; }
 
