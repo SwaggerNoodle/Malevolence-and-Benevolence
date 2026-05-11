@@ -52,4 +52,12 @@ void Helper_mat4Translate(float out[16],
 
 void Helper_mat4RotateX(float out[16], float radians);
 
-#endif //MALEVOLENCE_AND_BENEVOLENCE_HELPERS_H
+
+bool Helper_mouseToWorldOnZPlane(GameState *game,
+				int mouse_x,
+				int mouse_y,
+				float plane_z,
+				float *out_x,
+				float *out_y
+);
+#endif

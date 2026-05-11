@@ -44,6 +44,8 @@ static void initWorkSite(WorkSite *site, float x, float y, WorkSiteType type){
 }
 
 
+
+
 static void processEvents(GameState *game){
 	SDL_Event event;
 
@@ -86,6 +88,8 @@ static void processEvents(GameState *game){
 				game->input.mouse_delta_y = event.motion.yrel;
 				break;
 			case SDL_EVENT_MOUSE_BUTTON_DOWN:
+				game->input.mouse_x = (int)event.button.x;
+				game->input.mouse_y = (int)event.button.y;
 				switch (event.button.button){
 					case SDL_BUTTON_LEFT:
 						game->input.mouse_left_down = true;
@@ -98,6 +102,8 @@ static void processEvents(GameState *game){
 				}				
 				break;
 			case SDL_EVENT_MOUSE_BUTTON_UP:
+				game->input.mouse_x = (int)event.button.x;
+				game->input.mouse_y = (int)event.button.y;
 				switch (event.button.button){
 					case SDL_BUTTON_LEFT:
 						game->input.mouse_left_down = false;
@@ -112,6 +118,7 @@ static void processEvents(GameState *game){
 		}
 	}
 }
+
 
 
 
@@ -183,6 +190,8 @@ static int findWorkSiteAtScreenPos(GameState *game, int mouse_x, int mouse_y){
 }
 
 
+
+
 static void assignVillagerToSite(GameState *game, int villager_index, int site_index){
 	
 	Villager *villager;
@@ -220,6 +229,8 @@ static void assignVillagerToSite(GameState *game, int villager_index, int site_i
 			break;
 	}
 }
+
+
 
 
 static void updateWalkingVillager(GameState *game, Villager *villager){
@@ -297,7 +308,10 @@ static void updateWorkingVillager(GameState *game, Villager *villager){
 static void updateHeldVillager(GameState *game){
 	Villager *villager;
 	int site_index;
-	const float drag_scale = 0.08f;
+	
+	float mouse_world_x;
+	float mouse_world_y;
+
 
 	if (game->held_villager_index < 0 || game->held_villager_index >= game->villager_count){
 		game->held_villager_index = -1;
@@ -305,14 +319,20 @@ static void updateHeldVillager(GameState *game){
 	}
 
 	villager = &game->villagers[game->held_villager_index];
-
-	villager->x += (float)game->input.mouse_delta_x * drag_scale;
-	villager->y -= (float)game->input.mouse_delta_y * drag_scale;
-	villager->z = 3.0f;
-
 	villager->state = VILLAGER_HELD;
 	villager->job = JOB_NONE;
 	villager->target_site_index = -1;
+	villager->z = 3.0f;
+
+	if (Helper_mouseToWorldOnZPlane(game,
+					game->input.mouse_x,
+					game->input.mouse_y,
+					3.0f,
+					&mouse_world_x,
+					&mouse_world_y)){
+		villager->x = mouse_world_x + game->held_offset_x;
+		villager->y = mouse_world_y + game->held_offset_y;
+	}
 
 	if (game->input.mouse_left_released){
 		site_index = findWorkSiteAtScreenPos(game, game->input.mouse_x, game->input.mouse_y);
@@ -369,8 +389,6 @@ static void updateWindowTitle(GameState *game){
 			game->render_object_count);
 	SDL_SetWindowTitle(game->window, title);
 }
-
-
 static void update(GameState *game){
 	const float camera_speed = 10.0f;
 
@@ -382,11 +400,35 @@ static void update(GameState *game){
 	if (game->held_villager_index < 0 && game->input.mouse_left_pressed){
 		int clicked_index = findClickedVillager(game, game->input.mouse_x, game->input.mouse_y);
 		if (clicked_index >= 0){
+			Villager *villager = &game->villagers[clicked_index];
+
+			float mouse_world_x;
+			float mouse_world_y;
+
 			game->held_villager_index = clicked_index;
-			game->villagers[clicked_index].state = VILLAGER_HELD;
-			game->villagers[clicked_index].work_timer = 0.0f;
-			game->villagers[clicked_index].job = JOB_NONE;
-			game->villagers[clicked_index].target_site_index = -1;
+			
+			villager->state = VILLAGER_HELD;
+			villager->work_timer = 0.0f;
+			villager->job = JOB_NONE;
+			villager->target_site_index = -1;
+
+			villager->z = 3.0f;
+
+			if (Helper_mouseToWorldOnZPlane(game,
+							game->input.mouse_x,
+							game->input.mouse_y,
+							3.0f,
+							&mouse_world_x,
+							&mouse_world_y)){
+				game->held_offset_x = villager->x - mouse_world_x;
+				game->held_offset_y = villager->y - mouse_world_y;
+			}
+			else {
+				game->held_offset_x = 0.0f;
+				game->held_offset_y = 0.0f;
+			}
+			game->input.mouse_delta_x = 0;
+			game->input.mouse_delta_y = 0;
 		}
 	}
 	updateVillagers(game);

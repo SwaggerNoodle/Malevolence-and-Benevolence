@@ -97,7 +97,7 @@ typedef struct WorkSite {
 
 typedef struct GameState {
         bool running;
-
+	
         SDL_Window *window;
         int window_width;
         int window_height;
@@ -113,6 +113,9 @@ typedef struct GameState {
         Villager villagers[MAX_VILLAGERS];
         int villager_count;
         int held_villager_index;
+
+	float held_offset_x;
+        float held_offset_y;
 
         WorkSite work_sites[MAX_WORK_SITES];
         int work_site_count;

@@ -163,3 +163,84 @@ void Helper_mat4RotateX(float out[16], float radians){
 	out[9] = -s;
 	out[10] = c;
 }
+bool Helper_mouseToWorldOnZPlane(GameState *game,
+				 int mouse_x,
+				 int mouse_y,
+				 float plane_z,
+				 float *out_x,
+				 float *out_y){
+
+	int pixel_w = 0;
+	int pixel_h = 0;
+
+	float aspect;
+	float fov;
+	float tan_half_fov;
+
+	float ndc_x;
+	float ndc_y;
+
+	float ray_camera_x;
+	float ray_camera_y;
+	float ray_camera_z;
+
+	float pitch_rad;
+	float c;
+	float s;
+
+	float ray_world_x;
+	float ray_world_y;
+	float ray_world_z;
+
+	float t;
+
+	if (SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)){
+		pixel_w = game->window_width;
+		pixel_h = game->window_height;
+	}
+	if (pixel_w <= 0){
+		pixel_w = 1;
+	}
+	if (pixel_h <= 0){
+		pixel_h =1;
+	}
+
+	aspect = (float)pixel_w / (float)pixel_h;
+
+	fov = 60.0f * (3.14159265f / 180.0f);
+	tan_half_fov = tanf(fov *0.5f);
+
+	ndc_x = ((float)mouse_x / (float)pixel_w) * 2.0f - 1.0f;
+	ndc_y = ((float)mouse_y / (float)pixel_h) * 2.0f - 1.0f;
+
+	ray_camera_x = ndc_x * aspect * tan_half_fov;
+	ray_camera_y = ndc_y * tan_half_fov;
+	ray_camera_z = -1.0f;
+
+	pitch_rad = game->camera.pitch * (3.14159265f / 180.0f);
+	c = cosf(pitch_rad);
+	s = sinf(pitch_rad);
+
+	ray_world_x = ray_camera_x;
+	ray_world_y = ray_camera_y * c - ray_camera_z * s;
+	ray_world_z = ray_camera_y * s + ray_camera_z * c;
+
+	if (fabsf(ray_world_z) < 0.0001f){
+		return false;
+	}
+
+	t = (plane_z - game->camera.z) / ray_world_z;
+
+	if (t < 0.0f){
+		return false;
+	}
+
+	*out_x = game->camera.x + ray_world_x * t;
+	*out_y = game->camera.y + ray_world_y * t;
+
+	return true;
+}
+
+
+
+

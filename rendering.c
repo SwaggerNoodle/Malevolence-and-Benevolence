@@ -49,52 +49,56 @@ void pushRenderCube(GameState *game,
 
 
 bool projectWorldToScreen(GameState *game,
-                 float wx, float wy, float wz,
-                 int *screen_x, int *screen_y){
-    int pixel_w = 0;
-    int pixel_h = 0;
-    float aspect;
-    float pitch_rad;
-    float x;
-    float y;
-    float z;
-    float view_x;
-    float view_y;
-    float view_z;
-    float ndc_x; 	//ndc = normalized device coordinates
-    float ndc_y;
+	                  float wx, float wy, float wz,
+         	          int *screen_x, int *screen_y){
+	int pixel_w = 0;
+	int pixel_h = 0;
 
-    if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)){
-        pixel_w = game->window_width;
-        pixel_h = game->window_height;
-    }
-    if (pixel_h <= 0){
-        pixel_h = 1;
-    }
+	CameraUBO ubo;
+	const float *m;
 
-    aspect = (float)pixel_w / (float)pixel_h;
+	float clip_x;
+	float clip_y;
+	float clip_z;
+	float clip_w;
 
-    pitch_rad = game->camera.pitch * (3.14159265f / 180.0f);
+	float ndc_x;
+	float ndc_y;
+	float ndc_z;
 
-    x = wx - game->camera.x;
-    y = wy - game->camera.y;
-    z = wz - game->camera.z;
+	if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)){
+		pixel_w = game->window_width;
+		pixel_h = game->window_height;
+	}
+	if (pixel_h <= 0){
+	        pixel_h = 1;
+	}
+	
+	buildCameraMatrix(game, &ubo);
+	m = ubo.view_proj;
 
-    view_x = x;
-    view_y = y * cosf(pitch_rad) + z * sinf(pitch_rad);
-    view_z = -y * sinf(pitch_rad) + z * cosf(pitch_rad);
+	clip_x = m[0] * wx + m[4] * wy + m[8] * wz + m[12];
+	clip_y = m[1] * wx + m[5] * wy + m[9] * wz + m[13];
+	clip_z = m[2] * wx + m[6] * wy + m[10] * wz + m[14];
+	clip_w = m[3] * wx + m[7] * wy + m[11] * wz + m[15];
 
-    ndc_x = view_x / (aspect * -view_z);
-    ndc_y = view_y / (-view_z);
+	if (clip_w <= 0.0001f){
+		return false;
+	}
 
-    view_z -= 28.0f;
-    if (view_z >= -0.1f){
-        return false;
-    }
+	ndc_x = clip_x / clip_w;
+	ndc_y = clip_y / clip_w;
+	ndc_z = clip_z / clip_w;
 
-    *screen_x = (int)((ndc_x * 0.5f + 0.5f) * (float)pixel_w);
-    *screen_y = (int)((1.0f - (ndc_y * 0.5f + 0.5f)) * (float)pixel_h);
-    return true;
+	if (ndc_z < 0.0f || ndc_z > 1.0f){
+		return false;
+	}
+
+
+	*screen_x = (int)((ndc_x * 0.5f + 0.5f) * (float)pixel_w);
+	*screen_y = (int)((ndc_y * 0.5f + 0.5f) * (float)pixel_h);
+	
+	return true;
 }
 
 
