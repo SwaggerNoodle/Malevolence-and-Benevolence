@@ -163,6 +163,178 @@ void Helper_mat4RotateX(float out[16], float radians){
 	out[9] = -s;
 	out[10] = c;
 }
+bool Helper_mat4Inverse(float out[16], const float m[16]){
+	float inverted[16];
+	float det;
+	int i;
+
+	inverted[0] = m[5]  * m[10] * m[15] -
+		      m[5]  * m[11] * m[14] -
+      		      m[9]  * m[6]  * m[15] +
+		      m[9]  * m[7]  * m[14] +
+		      m[13] * m[6]  * m[11] -
+		      m[13] * m[7]  * m[10];
+
+	inverted[4] = -m[4]  * m[9]  * m[15] +
+      		       m[4]  * m[11] * m[14] +
+                       m[8]  * m[6]  * m[15] -
+                       m[8]  * m[7]  * m[14] -
+                       m[12] * m[6]  * m[11] +
+                       m[12] * m[7]  * m[10];
+
+	inverted[8] = m[4]  * m[9]  * m[15] -
+                      m[4]  * m[11] * m[13] -
+                      m[8]  * m[5]  * m[15] +
+                      m[8]  * m[7]  * m[13] +
+                      m[12] * m[5]  * m[11] -
+                      m[12] * m[7]  * m[9];
+
+        inverted[12] = -m[4]  * m[9]  * m[14] +
+                        m[4]  * m[10] * m[13] +
+                        m[8]  * m[5]  * m[14] -
+                        m[8]  * m[6]  * m[13] -
+                        m[12] * m[5]  * m[10] +
+                        m[12] * m[6]  * m[9];
+
+        inverted[1] = -m[1]  * m[10] * m[15] +
+                       m[1]  * m[11] * m[14] +
+                       m[9]  * m[2]  * m[15] -
+                       m[9]  * m[3]  * m[14] -
+                       m[13] * m[2]  * m[11] +
+                       m[13] * m[3]  * m[10];
+
+        inverted[5] = m[0]  * m[10] * m[15] -
+                      m[0]  * m[11] * m[14] -
+                      m[8]  * m[2]  * m[15] +
+                      m[8]  * m[3]  * m[14] +
+                      m[12] * m[2]  * m[11] -
+                      m[12] * m[3]  * m[10];
+
+        inverted[9] = -m[0]  * m[9]  * m[15] +
+                       m[0]  * m[11] * m[13] +
+                       m[8]  * m[1]  * m[15] -
+                       m[8]  * m[3]  * m[13] -
+                       m[12] * m[1]  * m[11] +
+                       m[12] * m[3]  * m[9];
+
+        inverted[13] = m[0]  * m[9]  * m[14] -
+                       m[0]  * m[10] * m[13] -
+                       m[8]  * m[1]  * m[14] +
+                       m[8]  * m[2]  * m[13] +
+                       m[12] * m[1]  * m[10] -
+                       m[12] * m[2]  * m[9];
+
+        inverted[2] = m[1]  * m[6] * m[15] -
+                      m[1]  * m[7] * m[14] -
+                      m[5]  * m[2] * m[15] +
+                      m[5]  * m[3] * m[14] +
+                      m[13] * m[2] * m[7] -
+                      m[13] * m[3] * m[6];
+
+        inverted[6] = -m[0]  * m[6] * m[15] +
+                       m[0]  * m[7] * m[14] +
+                       m[4]  * m[2] * m[15] -
+                       m[4]  * m[3] * m[14] -
+                       m[12] * m[2] * m[7] +
+                       m[12] * m[3] * m[6];
+
+        inverted[10] = m[0]  * m[5] * m[15] -
+                       m[0]  * m[7] * m[13] -
+                       m[4]  * m[1] * m[15] +
+                       m[4]  * m[3] * m[13] +
+                       m[12] * m[1] * m[7] -
+                       m[12] * m[3] * m[5];
+
+        inverted[14] = -m[0]  * m[5] * m[14] +
+                        m[0]  * m[6] * m[13] +
+                        m[4]  * m[1] * m[14] -
+                        m[4]  * m[2] * m[13] -
+                        m[12] * m[1] * m[6] +
+                        m[12] * m[2] * m[5];
+
+        inverted[3] = -m[1] * m[6] * m[11] +
+                       m[1] * m[7] * m[10] +
+                       m[5] * m[2] * m[11] -
+                       m[5] * m[3] * m[10] -
+                       m[9] * m[2] * m[7] +
+                       m[9] * m[3] * m[6];
+
+        inverted[7] = m[0] * m[6] * m[11] -
+                      m[0] * m[7] * m[10] -
+                      m[4] * m[2] * m[11] +
+                      m[4] * m[3] * m[10] +
+                      m[8] * m[2] * m[7] -
+                      m[8] * m[3] * m[6];
+
+        inverted[11] = -m[0] * m[5] * m[11] +
+                        m[0] * m[7] * m[9] +
+                        m[4] * m[1] * m[11] -
+                        m[4] * m[3] * m[9] -
+                        m[8] * m[1] * m[7] +
+                        m[8] * m[3] * m[5];
+
+        inverted[15] = m[0] * m[5] * m[10] -
+                       m[0] * m[6] * m[9] -
+                       m[4] * m[1] * m[10] +
+                       m[4] * m[2] * m[9] +
+                       m[8] * m[1] * m[6] -
+                       m[8] * m[2] * m[5];
+
+	det = m[0] * inverted[0] + m[1] * inverted[4] + m[2] * inverted[8] + m[3] * inverted[12];
+
+	if (fabsf(det) < 0.000001f){
+		return false;
+	}
+
+	det = 1.0f / det;
+
+	for (i = 0; i < 16; i++){
+		out[i] = inverted[i] * det;
+	}
+	return true;
+}
+bool Helper_unprojectPoint(const float inv_view_proj[16],
+		 	   float ndc_x,
+			   float ndc_y,
+			   float ndc_z,
+			   float out_point[3]){
+	float x;
+	float y;
+	float z;
+	float w;
+
+	x = inv_view_proj[0]  * ndc_x +
+            inv_view_proj[4]  * ndc_y +
+            inv_view_proj[8]  * ndc_z +
+            inv_view_proj[12];
+
+        y = inv_view_proj[1]  * ndc_x +
+            inv_view_proj[5]  * ndc_y +
+            inv_view_proj[9]  * ndc_z +
+            inv_view_proj[13];
+
+        z = inv_view_proj[2]  * ndc_x +
+            inv_view_proj[6]  * ndc_y +
+            inv_view_proj[10] * ndc_z +
+            inv_view_proj[14];
+
+        w = inv_view_proj[3]  * ndc_x +
+            inv_view_proj[7]  * ndc_y +
+            inv_view_proj[11] * ndc_z +
+            inv_view_proj[15];
+
+	if (fabsf(w) < 0.000001f){
+		return false;
+	}
+
+	out_point[0] = x / w;
+	out_point[1] = y / w;
+	out_point[2] = z / w;
+
+	return true;
+}
+
+
 bool Helper_mouseToWorldOnZPlane(GameState *game,
 				 int mouse_x,
 				 int mouse_y,
@@ -173,28 +345,27 @@ bool Helper_mouseToWorldOnZPlane(GameState *game,
 	int pixel_w = 0;
 	int pixel_h = 0;
 
-	float aspect;
-	float fov;
-	float tan_half_fov;
-
 	float ndc_x;
 	float ndc_y;
 
-	float ray_camera_x;
-	float ray_camera_y;
-	float ray_camera_z;
+	CameraUBO ubo;
+	float inv_view_proj[16];
 
-	float pitch_rad;
-	float c;
-	float s;
+	float near_point[3];
+	float far_point[3];
 
-	float ray_world_x;
-	float ray_world_y;
-	float ray_world_z;
+	float ray_x;
+	float ray_y;
+	float ray_z;
 
 	float t;
 
-	if (SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)){
+	if (game->vk.swapchain_extent.width > 0 && 
+	    game->vk.swapchain_extent.height > 0){
+		pixel_w = (int)game->vk.swapchain_extent.width;
+		pixel_h = (int)game->vk.swapchain_extent.height;
+	}
+	else if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)){
 		pixel_w = game->window_width;
 		pixel_h = game->window_height;
 	}
@@ -205,41 +376,56 @@ bool Helper_mouseToWorldOnZPlane(GameState *game,
 		pixel_h =1;
 	}
 
-	aspect = (float)pixel_w / (float)pixel_h;
-
-	fov = 60.0f * (3.14159265f / 180.0f);
-	tan_half_fov = tanf(fov *0.5f);
-
 	ndc_x = ((float)mouse_x / (float)pixel_w) * 2.0f - 1.0f;
 	ndc_y = ((float)mouse_y / (float)pixel_h) * 2.0f - 1.0f;
 
-	ray_camera_x = ndc_x * aspect * tan_half_fov;
-	ray_camera_y = ndc_y * tan_half_fov;
-	ray_camera_z = -1.0f;
+	buildCameraMatrix(game, &ubo);
 
-	pitch_rad = game->camera.pitch * (3.14159265f / 180.0f);
-	c = cosf(pitch_rad);
-	s = sinf(pitch_rad);
-
-	ray_world_x = ray_camera_x;
-	ray_world_y = ray_camera_y * c - ray_camera_z * s;
-	ray_world_z = ray_camera_y * s + ray_camera_z * c;
-
-	if (fabsf(ray_world_z) < 0.0001f){
+	if (!Helper_mat4Inverse(inv_view_proj, ubo.view_proj)){
+		return false;
+	}
+	if (!Helper_unprojectPoint(inv_view_proj, ndc_x, ndc_y, 0.0f, near_point) ||
+	    !Helper_unprojectPoint(inv_view_proj, ndc_x, ndc_y, 1.0f, far_point)){
 		return false;
 	}
 
-	t = (plane_z - game->camera.z) / ray_world_z;
+	ray_x = far_point[0] - near_point[0];
+	ray_y = far_point[1] - near_point[1];
+	ray_z = far_point[2] - near_point[2];
+
+	if (fabsf(ray_z) < 0.000001f){
+		return false;
+	}
+
+	t = (plane_z - near_point[2]) / ray_z;
 
 	if (t < 0.0f){
 		return false;
 	}
 
-	*out_x = game->camera.x + ray_world_x * t;
-	*out_y = game->camera.y + ray_world_y * t;
+	*out_x = near_point[0] + ray_x * t;
+	*out_y = near_point[1] + ray_y * t;
 
 	return true;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

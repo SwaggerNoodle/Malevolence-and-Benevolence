@@ -53,6 +53,15 @@ void Helper_mat4Translate(float out[16],
 void Helper_mat4RotateX(float out[16], float radians);
 
 
+bool Helper_mat4Inverse(float out[16], const float m[16]);
+
+bool Helper_unprojectPoint(const float inv_view_proj[16],
+			   float ndc_x,
+			   float ndc_y,
+			   float ndc_z,
+			   float out_point[3]
+);
+
 bool Helper_mouseToWorldOnZPlane(GameState *game,
 				int mouse_x,
 				int mouse_y,

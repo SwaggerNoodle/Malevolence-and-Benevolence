@@ -312,6 +312,7 @@ static void updateHeldVillager(GameState *game){
 	float mouse_world_x;
 	float mouse_world_y;
 
+	float villager_held_height = 1.5f;
 
 	if (game->held_villager_index < 0 || game->held_villager_index >= game->villager_count){
 		game->held_villager_index = -1;
@@ -322,16 +323,16 @@ static void updateHeldVillager(GameState *game){
 	villager->state = VILLAGER_HELD;
 	villager->job = JOB_NONE;
 	villager->target_site_index = -1;
-	villager->z = 3.0f;
+	villager->z = villager_held_height;
 
 	if (Helper_mouseToWorldOnZPlane(game,
 					game->input.mouse_x,
 					game->input.mouse_y,
-					3.0f,
+					villager_held_height,
 					&mouse_world_x,
 					&mouse_world_y)){
-		villager->x = mouse_world_x + game->held_offset_x;
-		villager->y = mouse_world_y + game->held_offset_y;
+		villager->x = mouse_world_x;
+		villager->y = mouse_world_y;
 	}
 
 	if (game->input.mouse_left_released){
@@ -405,6 +406,8 @@ static void update(GameState *game){
 			float mouse_world_x;
 			float mouse_world_y;
 
+			float villager_held_height = 1.5f;
+
 			game->held_villager_index = clicked_index;
 			
 			villager->state = VILLAGER_HELD;
@@ -412,21 +415,20 @@ static void update(GameState *game){
 			villager->job = JOB_NONE;
 			villager->target_site_index = -1;
 
-			villager->z = 3.0f;
+			villager->z = villager_held_height;
 
 			if (Helper_mouseToWorldOnZPlane(game,
 							game->input.mouse_x,
 							game->input.mouse_y,
-							3.0f,
+							villager_held_height,
 							&mouse_world_x,
 							&mouse_world_y)){
-				game->held_offset_x = villager->x - mouse_world_x;
-				game->held_offset_y = villager->y - mouse_world_y;
+				villager->x = mouse_world_x;
+				villager->y = mouse_world_y;
 			}
-			else {
-				game->held_offset_x = 0.0f;
-				game->held_offset_y = 0.0f;
-			}
+			game->held_offset_x = 0.0f;
+			game->held_offset_y = 0.0f;
+			
 			game->input.mouse_delta_x = 0;
 			game->input.mouse_delta_y = 0;
 		}
