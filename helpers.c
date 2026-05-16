@@ -56,6 +56,80 @@ bool Helper_createBuffer(GameState *game,
 
 	return true;
 }
+bool Helper_createImage(GameState *game,
+			uint32_t width,
+			uint32_t height,
+			VkFormat format,
+			VkImageTiling tiling,
+			VkImageUsageFlags usage,
+			VkMemoryPropertyFlags properties,
+			VkImage *image,
+			VkDeviceMemory *memory){
+
+	VkImageCreateInfo image_info = {0};
+	VkMemoryRequirements mem_requirements;
+	VkMemoryAllocateInfo alloc_info = {0};
+	uint32_t memory_type_index = 0;
+
+	image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	image_info.imageType = VK_IMAGE_TYPE_2D;
+	image_info.extent.width = width;
+	image_info.extent.height = height;
+	image_info.extent.depth = 1;
+	image_info.mipLevels = 1;
+	image_info.arrayLayers = 1;
+	image_info.format = format;
+	image_info.tiling = tiling;
+	image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	image_info.usage = usage;
+	image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+	image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	VK_CHECK(vkCreateImage(game->vk.device, &image_info, NULL, image));
+
+	vkGetImageMemoryRequirements(game->vk.device, *image, &mem_requirements);
+
+	if (!Helper_findMemoryType(game,
+				   mem_requirements.memoryTypeBits,
+				   properties,
+				   &memory_type_index)){
+		fprintf(stderr, "Failed to find suitable image memory type\n");
+		return false;
+	}
+
+	alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	alloc_info.allocationSize = mem_requirements.size;
+	alloc_info.memoryTypeIndex = memory_type_index;
+
+	VK_CHECK(vkAllocateMemory(game->vk.device, &alloc_info, NULL, memory));
+	VK_CHECK(vkBindImageMemory(game->vk.device, *image, *memory, 0));
+
+	return true;
+}
+bool Helper_createImageView(GameState *game,
+			    VkImage image,
+			    VkFormat format,
+			    VkImageAspectFlags aspect_flags,
+			    VkImageView *image_view){
+
+	VkImageViewCreateInfo view_info = {0};
+
+	view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	view_info.image = image;
+	view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	view_info.format = format;
+	view_info.subresourceRange.aspectMask = aspect_flags;
+	view_info.subresourceRange.baseMipLevel = 0;
+	view_info.subresourceRange.levelCount = 1;
+	view_info.subresourceRange.baseArrayLayer = 0;
+	view_info.subresourceRange.layerCount = 1;
+
+	VK_CHECK(vkCreateImageView(game->vk.device,
+				   &view_info,
+				   NULL,
+				   image_view));
+	return true;
+}
 bool Helper_readBinaryFile(const char *filename, unsigned char **out_data, size_t *out_size){
 	FILE *f;
 	long size;
@@ -163,6 +237,16 @@ void Helper_mat4RotateX(float out[16], float radians){
 	out[9] = -s;
 	out[10] = c;
 }
+void Helper_mat4RotateZ(float out[16], float radians){
+        float c = cosf(radians);
+        float s = sinf(radians);
+
+        Helper_mat4Identity(out);
+        out[0] = c;
+        out[1] = s;
+        out[4] = -s;
+        out[5] = c;
+}
 bool Helper_mat4Inverse(float out[16], const float m[16]){
 	float inverted[16];
 	float det;
@@ -175,7 +259,7 @@ bool Helper_mat4Inverse(float out[16], const float m[16]){
 		      m[13] * m[6]  * m[11] -
 		      m[13] * m[7]  * m[10];
 
-	inverted[4] = -m[4]  * m[9]  * m[15] +
+	inverted[4] = -m[4]  * m[10]  * m[15] +
       		       m[4]  * m[11] * m[14] +
                        m[8]  * m[6]  * m[15] -
                        m[8]  * m[7]  * m[14] -
@@ -408,12 +492,6 @@ bool Helper_mouseToWorldOnZPlane(GameState *game,
 
 	return true;
 }
-
-
-
-
-
-
 
 
 

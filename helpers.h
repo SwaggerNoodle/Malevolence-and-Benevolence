@@ -20,6 +20,24 @@ bool Helper_createBuffer(GameState *game,
 				VkDeviceMemory *memory
 );
 
+bool Helper_createImage(GameState *game,
+			uint32_t width,
+			uint32_t height,
+			VkFormat format,
+			VkImageTiling tiling,
+			VkImageUsageFlags usage,
+			VkMemoryPropertyFlags properties,
+			VkImage *image,
+			VkDeviceMemory *memory
+);
+
+bool Helper_createImageView(GameState *game,
+			    VkImage image,
+			    VkFormat format,
+			    VkImageAspectFlags aspect_flags,
+			    VkImageView *image_view
+);
+
 bool Helper_readBinaryFile(const char *filename,
 				unsigned char **out_data,
 				 size_t *out_size
@@ -52,6 +70,7 @@ void Helper_mat4Translate(float out[16],
 
 void Helper_mat4RotateX(float out[16], float radians);
 
+void Helper_mat4RotateZ(float out[16], float radians);
 
 bool Helper_mat4Inverse(float out[16], const float m[16]);
 

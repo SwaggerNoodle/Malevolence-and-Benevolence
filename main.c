@@ -51,6 +51,7 @@ static void processEvents(GameState *game){
 
 	game->input.mouse_delta_x = 0;
 	game->input.mouse_delta_y = 0;
+	game->input.mouse_wheel_y = 0.0f;
 	game->input.mouse_left_pressed = false;
 	game->input.mouse_left_released = false;
 	game->input.mouse_right_pressed = false;
@@ -115,6 +116,10 @@ static void processEvents(GameState *game){
 						break;
 				}
 				break;
+			case SDL_EVENT_MOUSE_WHEEL:
+				game->input.mouse_wheel_y += event.wheel.y;
+				break;
+
 		}
 	}
 }
@@ -393,10 +398,83 @@ static void updateWindowTitle(GameState *game){
 static void update(GameState *game){
 	const float camera_speed = 10.0f;
 
-	if (game->input.key_w){ game->camera.y -= camera_speed * game->delta; }
-	if (game->input.key_s){ game->camera.y += camera_speed * game->delta; }
-	if (game->input.key_a){ game->camera.x -= camera_speed * game->delta; }
-	if (game->input.key_d){ game->camera.x += camera_speed * game->delta; }
+	float yaw_rad = game->camera.yaw * (3.14159265 / 180.0f);
+
+	float right_x = cosf(yaw_rad);
+	float right_y = sinf(yaw_rad);
+
+	float forward_x = -sinf(yaw_rad);
+	float forward_y = cosf(yaw_rad);
+
+	if (game->input.key_w){ 
+		game->camera.x -= forward_x * camera_speed * game->delta;
+		game->camera.y -= forward_y * camera_speed * game->delta;
+	}
+	if (game->input.key_s){ 
+		game->camera.x += forward_x * camera_speed * game->delta;
+		game->camera.y += forward_y * camera_speed * game->delta; 
+	}
+	if (game->input.key_a){
+		game->camera.x -= right_x * camera_speed * game->delta;
+		game->camera.y -= right_y * camera_speed * game->delta;
+	}
+	if (game->input.key_d){
+		game->camera.x += right_x * camera_speed * game->delta;
+		game->camera.y += right_y * camera_speed * game->delta;
+	}
+
+	if (game->input.mouse_wheel_y != 0.0f){
+		const float zoom_speed = 1.0f;
+		const float min_camera_z = 3.0f;
+		const float max_camera_z = 25.0f;
+
+		game->camera.z -= game->input.mouse_wheel_y * zoom_speed;
+
+		if (game->camera.z < min_camera_z){
+			game->camera.z = min_camera_z;
+		}
+		if (game->camera.z > max_camera_z){
+			game->camera.z = max_camera_z;
+		}
+	}
+
+	if (game->input.mouse_right_pressed){
+		int center_x = (int)game->vk.swapchain_extent.width / 2;
+		int center_y = (int)game->vk.swapchain_extent.height / 2;
+
+		if (!Helper_mouseToWorldOnZPlane(game,
+						 center_x,
+						 center_y,
+						 0.0f,
+						 &game->orbit_anchor_x,
+						 &game->orbit_anchor_y)){
+			game->orbit_anchor_x = game->camera.x;
+			game->orbit_anchor_y = game->camera.y;
+		}
+	}
+
+	if (game->input.mouse_right_down && game->input.mouse_delta_x != 0){
+		const float rotate_speed = 0.25f;
+
+		float old_yaw = game->camera.yaw;
+		float new_yaw = old_yaw + (float)game->input.mouse_delta_x * rotate_speed;
+
+		float old_yaw_rad = old_yaw * (3.14159265f / 180.0f);
+		float new_yaw_rad = new_yaw * (3.14159265f / 180.0f);
+		float yaw_delta = new_yaw_rad - old_yaw_rad;
+
+		float dx = game->camera.x - game->orbit_anchor_x;
+		float dy = game->camera.y - game->orbit_anchor_y;
+
+		float dist = sqrtf(dx * dx + dy * dy);
+		float angle = atan2f(dy, dx);
+
+		angle += yaw_delta;
+
+		game->camera.x = game->orbit_anchor_x + cosf(angle) * dist;
+		game->camera.y = game->orbit_anchor_y + sinf(angle) * dist;
+		game->camera.yaw = new_yaw;
+	}
 
 	if (game->held_villager_index < 0 && game->input.mouse_left_pressed){
 		int clicked_index = findClickedVillager(game, game->input.mouse_x, game->input.mouse_y);
@@ -482,6 +560,7 @@ int main(int argc, char *argv[]){
 	    !createRenderPass(&game) ||
 	    !createDescriptorSetLayout(&game) ||
 	    !createGraphicsPipeline(&game) ||
+	    !createDepthResources(&game) ||
 	    !createFramebuffers(&game) ||
 	    !createCommandPool(&game) ||
 	    !createMeshBuffers(&game) ||
@@ -502,6 +581,7 @@ int main(int argc, char *argv[]){
 	game.camera.y = 0.0f;
 	game.camera.z = 8.0f;
 	game.camera.pitch = 55.0f;
+	game.camera.yaw = 0.0f;
 
 	game.temple.x = 0.0f;
 	game.temple.y = 0.0f;

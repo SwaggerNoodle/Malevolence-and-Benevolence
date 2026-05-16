@@ -105,19 +105,39 @@ bool projectWorldToScreen(GameState *game,
 
 void buildCameraMatrix(GameState *game, CameraUBO *ubo){
 	float proj[16];
-	float rot[16];
+	float yaw[16];
+	float pitch[16];
+	float rotation[16];
 	float trans[16];
 	float view[16];
-	float aspect = (float)game->vk.swapchain_extent.width / (float)game->vk.swapchain_extent.height;
-	float pitch_rad = game->camera.pitch * (3.14159265f / 180.0f);
+
+	float aspect;
+	float pitch_rad;
+	float yaw_rad;
+
+	if (game->vk.swapchain_extent.height == 0){
+		aspect = 1.0f;
+	}
+	else {
+		aspect = (float)game->vk.swapchain_extent.width / 
+		       (float)game->vk.swapchain_extent.height;
+	}
+
+	pitch_rad = game->camera.pitch * (3.14159265f / 180.0f);
+	yaw_rad = game->camera.yaw * (3.14159265f / 180.0f);
 
 	Helper_mat4Perspective(proj, 60.0f * (3.14159265f / 180.0f), aspect, 0.1f, 100.0f);
 	proj[5] *= -1.0f; //OpenGL to Vulkan translation bandaid
 
-	Helper_mat4RotateX(rot, pitch_rad);
-	Helper_mat4Translate(trans, -game->camera.x, -game->camera.y, -game->camera.z);
+	Helper_mat4RotateX(pitch, pitch_rad);
+	Helper_mat4RotateZ(yaw, -yaw_rad);
+	Helper_mat4Translate(trans,
+			     -game->camera.x, 
+			     -game->camera.y, 
+			     -game->camera.z);
 
-	Helper_mat4Multiply(view, rot, trans);
+	Helper_mat4Multiply(rotation, pitch, yaw);
+	Helper_mat4Multiply(view, rotation, trans);
 	Helper_mat4Multiply(ubo->view_proj, proj, view);
 }
 
@@ -659,6 +679,21 @@ void destroySwapchainObjects(GameState *game){
         vk->pipeline_layout = VK_NULL_HANDLE;
     }
 
+    if (vk->depth_image_view != VK_NULL_HANDLE){
+	    vkDestroyImageView(vk->device, vk->depth_image_view, NULL);
+	    vk->depth_image_view = VK_NULL_HANDLE;
+    }
+
+    if (vk->depth_image != VK_NULL_HANDLE){
+	    vkDestroyImage(vk->device, vk->depth_image, NULL);
+	    vk->depth_image = VK_NULL_HANDLE;
+    }
+
+    if (vk->depth_image_memory != VK_NULL_HANDLE){
+	    vkFreeMemory(vk->device, vk->depth_image_memory, NULL);
+	    vk->depth_image_memory = VK_NULL_HANDLE;
+    }
+
     if (vk->render_pass != VK_NULL_HANDLE){
         vkDestroyRenderPass(vk->device, vk->render_pass, NULL);
         vk->render_pass = VK_NULL_HANDLE;
@@ -767,69 +802,96 @@ bool createImageViews(GameState *game){
 
 
 bool createRenderPass(GameState *game){
-    VulkanState *vk = &game->vk;
-    VkAttachmentDescription color_attachment = {0};
-    VkAttachmentReference color_attachment_ref = {0};
-    VkSubpassDescription subpass = {0};
-    VkSubpassDependency dependency = {0};
-    VkRenderPassCreateInfo render_pass_info = {0};
+	VulkanState *vk = &game->vk;
 
-    color_attachment.format = vk->swapchain_format;
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	VkAttachmentDescription attachments[2] = {0};
+	VkAttachmentReference color_attachment_ref = {0};
+	VkAttachmentReference depth_attachment_ref = {0};
 
-    color_attachment_ref.attachment = 0;
-    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	VkSubpassDescription subpass = {0};
+	VkSubpassDependency dependency = {0};
 
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_attachment_ref;
+	VkRenderPassCreateInfo render_pass_info = {0};
 
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	attachments[0].format = vk->swapchain_format;
+	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    render_pass_info.attachmentCount = 1;
-    render_pass_info.pAttachments = &color_attachment;
-    render_pass_info.subpassCount = 1;
-    render_pass_info.pSubpasses = &subpass;
-    render_pass_info.dependencyCount = 1;
-    render_pass_info.pDependencies = &dependency;
+	attachments[1].format = VK_FORMAT_D32_SFLOAT;
+	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VK_CHECK(vkCreateRenderPass(vk->device, &render_pass_info, NULL, &vk->render_pass));
-    return true;
+
+
+	color_attachment_ref.attachment = 0;
+	color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	depth_attachment_ref.attachment = 1;
+	depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &color_attachment_ref;
+	subpass.pDepthStencilAttachment = &depth_attachment_ref;
+
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = 
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependency.dstStageMask = 
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+			VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+	dependency.dstAccessMask = 
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+			VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	render_pass_info.attachmentCount = 2;
+	render_pass_info.pAttachments = attachments;
+	render_pass_info.subpassCount = 1;
+	render_pass_info.pSubpasses = &subpass;
+	render_pass_info.dependencyCount = 1;
+	render_pass_info.pDependencies = &dependency;
+
+	VK_CHECK(vkCreateRenderPass(vk->device, &render_pass_info, NULL, &vk->render_pass));
+	return true;
 }
 
 
 
 bool createFramebuffers(GameState *game){
-    VulkanState *vk = &game->vk;
-    uint32_t i;
+	VulkanState *vk = &game->vk;
+	uint32_t i;
 
-    for (i = 0; i < vk->swapchain_image_count; i++) {
-        VkImageView attachments[1] = { vk->swapchain_image_views[i] };
-        VkFramebufferCreateInfo framebuffer_info = {0};
+	for (i = 0; i < vk->swapchain_image_count; i++) {
+		VkImageView attachments[2] = {
+			vk->swapchain_image_views[i],
+			vk->depth_image_view
+		};
+	        VkFramebufferCreateInfo framebuffer_info = {0};
 
-        framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebuffer_info.renderPass = vk->render_pass;
-        framebuffer_info.attachmentCount = 1;
-        framebuffer_info.pAttachments = attachments;
-        framebuffer_info.width = vk->swapchain_extent.width;
-        framebuffer_info.height = vk->swapchain_extent.height;
-        framebuffer_info.layers = 1;
+	        framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	        framebuffer_info.renderPass = vk->render_pass;
+	        framebuffer_info.attachmentCount = 2;
+	        framebuffer_info.pAttachments = attachments;
+	        framebuffer_info.width = vk->swapchain_extent.width;
+	        framebuffer_info.height = vk->swapchain_extent.height;
+	        framebuffer_info.layers = 1;
 
-        VK_CHECK(vkCreateFramebuffer(vk->device, &framebuffer_info, NULL, &vk->framebuffers[i]));
-    }
-
-    return true;
+        	VK_CHECK(vkCreateFramebuffer(vk->device, &framebuffer_info, NULL, &vk->framebuffers[i]));
+	}
+	return true;
 }
 
 
@@ -885,37 +947,38 @@ bool createSyncObjects(GameState *game){
 
 
 bool recreateSwapchain(GameState *game){
-    VulkanState *vk = &game->vk;
-    int pixel_w = 0;
-    int pixel_h = 0;
+	VulkanState *vk = &game->vk;
+	int pixel_w = 0;
+	int pixel_h = 0;
 
-    if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)) {
-        pixel_w = game->window_width;
-        pixel_h = game->window_height;
-    }
+	if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)) {
+		pixel_w = game->window_width;
+	        pixel_h = game->window_height;
+	}
 
-    while (pixel_w == 0 || pixel_h == 0) {
-        SDL_WaitEvent(NULL);
-        if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)) {
-            pixel_w = game->window_width;
-            pixel_h = game->window_height;
-        }
-    }
+	while (pixel_w == 0 || pixel_h == 0) {
+        	SDL_WaitEvent(NULL);
+	        if (!SDL_GetWindowSizeInPixels(game->window, &pixel_w, &pixel_h)) {
+	            pixel_w = game->window_width;
+	            pixel_h = game->window_height;
+		}
+	}
 
-    vkDeviceWaitIdle(vk->device);
-    destroySwapchainObjects(game);
+	vkDeviceWaitIdle(vk->device);
+	destroySwapchainObjects(game);
 
-    if (!createSwapchain(game)) return false;
-    if (!createImageViews(game)) return false;
-    if (!createRenderPass(game)) return false;
-    if (!createGraphicsPipeline(game)) return false;
-    if (!createFramebuffers(game)) return false;
-    if (!createUniformBuffers(game)) return false;
-    if (!createDescriptorPool(game)) return false;
-    if (!createDescriptorSets(game)) return false;
+	if (!createSwapchain(game)) return false;
+	if (!createImageViews(game)) return false;
+	if (!createRenderPass(game)) return false;
+	if (!createGraphicsPipeline(game)) return false;
+	if (!createDepthResources(game)) return false;
+	if (!createFramebuffers(game)) return false;
+	if (!createUniformBuffers(game)) return false;
+	if (!createDescriptorPool(game)) return false;
+	if (!createDescriptorSets(game)) return false;
 
-    vk->framebuffer_resized = false;
-    return true;
+	vk->framebuffer_resized = false;
+	return true;
 }
 
 
@@ -957,7 +1020,31 @@ bool createSurface(GameState *game) {
     return true;
 }
 
+bool createDepthResources(GameState *game){
+	VulkanState *vk = &game->vk;
 
+	vk->depth_format = VK_FORMAT_D32_SFLOAT;
+
+	if (!Helper_createImage(game,
+				vk->swapchain_extent.width,
+				vk->swapchain_extent.height,
+				vk->depth_format,
+				VK_IMAGE_TILING_OPTIMAL,
+				VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				&vk->depth_image,
+				&vk->depth_image_memory)){
+		return false;
+	}
+	if (!Helper_createImageView(game,
+				    vk->depth_image,
+				    vk->depth_format,
+				    VK_IMAGE_ASPECT_DEPTH_BIT,
+				    &vk->depth_image_view)){
+		return false;
+	}
+	return true;
+}
 
 bool createGraphicsPipeline(GameState *game){
 	VkShaderModule vert_module = VK_NULL_HANDLE;
@@ -978,6 +1065,7 @@ bool createGraphicsPipeline(GameState *game){
 	VkPipelineColorBlendStateCreateInfo color_blending = {0};
 	VkPipelineLayoutCreateInfo pipeline_layout_info = {0};
 	VkGraphicsPipelineCreateInfo pipeline_info = {0};
+	VkPipelineDepthStencilStateCreateInfo depth_stencil = {0};
 
 	if (!Helper_createShaderModule(game, "shader.vert.spv", &vert_module)){
 		return false;
@@ -1092,6 +1180,14 @@ bool createGraphicsPipeline(GameState *game){
 	pipeline_info.layout = game->vk.pipeline_layout;
 	pipeline_info.renderPass = game->vk.render_pass;
 	pipeline_info.subpass = 0;
+	pipeline_info.pDepthStencilState = &depth_stencil;
+
+	depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depth_stencil.depthTestEnable = VK_TRUE;
+	depth_stencil.depthWriteEnable = VK_TRUE;
+	depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depth_stencil.depthBoundsTestEnable = VK_FALSE;
+	depth_stencil.stencilTestEnable = VK_FALSE;
 
 	VK_CHECK(vkCreateGraphicsPipelines(game->vk.device,
 					   VK_NULL_HANDLE,
@@ -1111,7 +1207,7 @@ bool recordCommandBuffer(GameState *game, uint32_t image_index){
     VulkanState *vk = &game->vk;
     VkCommandBuffer cmd = vk->command_buffers[image_index];
     VkCommandBufferBeginInfo begin_info = {0};
-    VkClearValue clear_value;
+    VkClearValue clear_values[2];
     VkRenderPassBeginInfo render_pass_info = {0};
     VkBuffer vertex_buffers[2];
     VkDeviceSize offsets[2] = {0, 0};
@@ -1119,10 +1215,13 @@ bool recordCommandBuffer(GameState *game, uint32_t image_index){
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
 
-    clear_value.color.float32[0] = 0.10f;
-    clear_value.color.float32[1] = 0.12f;
-    clear_value.color.float32[2] = 0.18f;
-    clear_value.color.float32[3] = 1.0f;
+    clear_values[0].color.float32[0] = 0.10f;
+    clear_values[0].color.float32[1] = 0.12f;
+    clear_values[0].color.float32[2] = 0.18f;
+    clear_values[0].color.float32[3] = 1.0f;
+
+    clear_values[1].depthStencil.depth = 1.0f;
+    clear_values[1].depthStencil.stencil = 0;
 
     render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_info.renderPass = vk->render_pass;
@@ -1130,8 +1229,8 @@ bool recordCommandBuffer(GameState *game, uint32_t image_index){
     render_pass_info.renderArea.offset.x = 0;
     render_pass_info.renderArea.offset.y = 0;
     render_pass_info.renderArea.extent = vk->swapchain_extent;
-    render_pass_info.clearValueCount = 1;
-    render_pass_info.pClearValues = &clear_value;
+    render_pass_info.clearValueCount = 2;
+    render_pass_info.pClearValues = clear_values;
 
     vkCmdBeginRenderPass(cmd, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 

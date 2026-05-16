@@ -35,6 +35,8 @@ typedef struct InputState {
         bool mouse_right_pressed;
         bool mouse_right_released;
 
+	float mouse_wheel_y;
+
         int mouse_x;
         int mouse_y;
         int mouse_delta_x;
@@ -45,6 +47,7 @@ typedef struct Camera {
         float y;
         float z;
         float pitch;
+	float yaw;
 } Camera;
 typedef struct WorldObject {
         float x;
@@ -101,6 +104,9 @@ typedef struct GameState {
         SDL_Window *window;
         int window_width;
         int window_height;
+
+	float orbit_anchor_x;
+	float orbit_anchor_y;
 
         float delta;
         Uint64 last_ticks;

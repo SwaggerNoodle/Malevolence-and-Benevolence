@@ -59,56 +59,61 @@ typedef struct SwapchainSupportInfo {
 
 
 typedef struct VulkanState {
-    VkInstance instance;
-    VkSurfaceKHR surface;
+	VkInstance instance;
+	VkSurfaceKHR surface;
 
-    VkPhysicalDevice physical_device;
-    VkDevice device;
+	VkPhysicalDevice physical_device;
+	VkDevice device;
 
-    uint32_t graphics_family;
-    uint32_t present_family;
-    VkQueue graphics_queue;
-    VkQueue present_queue;
+	uint32_t graphics_family;
+	uint32_t present_family;
+	VkQueue graphics_queue;
+	VkQueue present_queue;
 
-    VkSwapchainKHR swapchain;
-    VkFormat swapchain_format;
-    VkExtent2D swapchain_extent;
-    uint32_t swapchain_image_count;
+	VkSwapchainKHR swapchain;
+	VkFormat swapchain_format;
+	VkExtent2D swapchain_extent;
+	uint32_t swapchain_image_count;
 
-    VkImage swapchain_images[MAX_SWAPCHAIN_IMAGES];
-    VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGES];
-    VkFramebuffer framebuffers[MAX_SWAPCHAIN_IMAGES];
+	VkImage swapchain_images[MAX_SWAPCHAIN_IMAGES];
+	VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGES];
+	VkFramebuffer framebuffers[MAX_SWAPCHAIN_IMAGES];
 
-    VkRenderPass render_pass;
+	VkImage depth_image;
+	VkDeviceMemory depth_image_memory;
+	VkImageView depth_image_view;
+	VkFormat depth_format;
 
-    VkDescriptorSetLayout descriptor_set_layout;
-    VkPipelineLayout pipeline_layout;
-    VkPipeline graphics_pipeline;
-    VkDescriptorPool descriptor_pool;
-    VkDescriptorSet descriptor_sets[MAX_SWAPCHAIN_IMAGES];
+	VkRenderPass render_pass;
 
-    VkCommandPool command_pool;
-    VkCommandBuffer command_buffers[MAX_SWAPCHAIN_IMAGES];
+	VkDescriptorSetLayout descriptor_set_layout;
+	VkPipelineLayout pipeline_layout;
+	VkPipeline graphics_pipeline;
+	VkDescriptorPool descriptor_pool;
+	VkDescriptorSet descriptor_sets[MAX_SWAPCHAIN_IMAGES];
 
-    VkBuffer vertex_buffer;
-    VkDeviceMemory vertex_buffer_memory;
+	VkCommandPool command_pool;
+	VkCommandBuffer command_buffers[MAX_SWAPCHAIN_IMAGES];
 
-    VkBuffer index_buffer;
-    VkDeviceMemory index_buffer_memory;
-    uint32_t index_count;
+	VkBuffer vertex_buffer;
+	VkDeviceMemory vertex_buffer_memory;
 
-    VkBuffer instance_buffer;
-    VkDeviceMemory instance_buffer_memory;
+	VkBuffer index_buffer;
+	VkDeviceMemory index_buffer_memory;
+	uint32_t index_count;
 
-    VkBuffer uniform_buffers[MAX_SWAPCHAIN_IMAGES];
-    VkDeviceMemory uniform_buffer_memories[MAX_SWAPCHAIN_IMAGES];
+	VkBuffer instance_buffer;
+	VkDeviceMemory instance_buffer_memory;
 
-    VkSemaphore image_available[MAX_FRAMES_IN_FLIGHT];
-    VkSemaphore render_finished[MAX_FRAMES_IN_FLIGHT];
-    VkFence in_flight[MAX_FRAMES_IN_FLIGHT];
+	VkBuffer uniform_buffers[MAX_SWAPCHAIN_IMAGES];
+	VkDeviceMemory uniform_buffer_memories[MAX_SWAPCHAIN_IMAGES];
 
-    bool framebuffer_resized;
-    uint32_t current_frame;
+	VkSemaphore image_available[MAX_FRAMES_IN_FLIGHT];
+	VkSemaphore render_finished[MAX_FRAMES_IN_FLIGHT];
+	VkFence in_flight[MAX_FRAMES_IN_FLIGHT];
+
+	bool framebuffer_resized;
+	uint32_t current_frame;
 } VulkanState;
 
 
@@ -183,6 +188,8 @@ bool createSyncObjects(GameState *game);
 bool recreateSwapchain(GameState *game);
 
 bool createInstance(GameState *game);
+
+bool createDepthResources(GameState *game);
 
 bool createGraphicsPipeline(GameState *game);
 
