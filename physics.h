@@ -37,6 +37,15 @@ void Physics_resolveGroundCollision(PhysicsBody *body);
 
 bool Physics_bodyIntersectsAABB(PhysicsBody *body,
 				float x,  float y,  float z,
-				float sx, float sy, float sz);
+				float sx, float sy, float sz
+);
+
+void Physics_reflectVelocity(PhysicsBody *body,
+			     float normal_x,
+			     float normal_y,
+			     float normal_z,
+			     float bounce
+);
+
 
 #endif

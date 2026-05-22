@@ -424,14 +424,60 @@ static void updateHeldVillager(GameState *game){
 	}
 }
 static void updateThrownVillager(GameState *game, Villager *villager){
+	PhysicsBody *body = &villager->body;
+
+	float old_x = body->x;
+	float old_y = body->y;
+	float old_z = body->z;
+
 	Physics_applyGravity(&villager->body, game->delta);
 	Physics_integrate(&villager->body, game->delta);
+
+	if (Physics_bodyIntersectsAABB(body,
+				       game->temple.x,
+				       game->temple.y,
+				       game->temple.z,
+				       game->temple.size_x,
+				       game->temple.size_y,
+				       game->temple.size_z)){
+
+		float normal_x = 0.0f;
+		float normal_y = 0.0f;
+		float normal_z = 0.0f;
+
+		float dx = old_x - game->temple.x;
+		float dy = old_y - game->temple.y;
+
+		if (fabsf(dx) > fabsf(dy)){
+			if (dx > 0.0f){
+				normal_x = 1.0f;
+			}
+			else {
+				normal_x = -1.0f;
+			}
+		}
+		else {
+			if (dy > 0.0f){
+				normal_y = 1.0f;
+			}
+			else {
+				normal_y = -1.0f;
+			}
+		}
+
+		body->x = old_x;
+		body->y = old_y;
+		body->z = old_z;
+
+		Physics_reflectVelocity(body, normal_x, normal_y, normal_z, 0.25f);
+	}
+
 	Physics_resolveGroundCollision(&villager->body);
 
-	if (villager->body.on_ground &&
-	    fabsf(villager->body.vx) < 0.05f &&
-	    fabsf(villager->body.vy) < 0.05f &&
-	    fabsf(villager->body.vz) < 0.05f){
+	if (body->on_ground &&
+	    fabsf(body->vx) < 0.05f &&
+	    fabsf(body->vy) < 0.05f &&
+	    fabsf(body->vz) < 0.05f){
 
 	    villager->state = VILLAGER_IDLE;
 	}

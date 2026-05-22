@@ -121,6 +121,32 @@ bool Physics_bodyIntersectsAABB(PhysicsBody *body,
 
 
 
+void Physics_reflectVelocity(PhysicsBody *body,
+                             float normal_x,
+                             float normal_y,
+                             float normal_z,
+                             float bounce){
+
+	float dot;
+
+	if (!body || !body->active){
+		return;
+	}
+
+	dot = body->vx * normal_x + 
+	      body->vy * normal_y + 
+	      body->vz * normal_z;
+
+	if (dot >= 0.0f){
+		return;
+	}
+
+	body->vx = body->vx - (1.0f + bounce) * dot * normal_x;
+	body->vy = body->vy - (1.0f + bounce) * dot * normal_y;
+	body->vz = body->vz - (1.0f + bounce) * dot * normal_z;
+}
+
+
 
 
 
