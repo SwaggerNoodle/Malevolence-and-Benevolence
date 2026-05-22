@@ -192,10 +192,13 @@ void buildRenderList(GameState *game){
                 break;
             case VILLAGER_WORKING:
                 r = 0.35f; g = 1.00f; b = 0.35f;
+		break;
+	    case VILLAGER_THROWN:
+		r = 0.50f; g = 0.60f; b = 1.00f;
         }
         pushRenderCube(game,
-                   villager->x,      villager->y,      villager->z,
-                   villager->size_x, villager->size_y, villager->size_z,
+                   villager->body.x,	  villager->body.y, 	 villager->body.z,
+                   villager->body.size_x, villager->body.size_y, villager->body.size_z,
                    r, g, b);
     }
 }

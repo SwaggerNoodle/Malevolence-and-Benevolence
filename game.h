@@ -3,10 +3,12 @@
 
 #include "common.h"
 #include "rendering.h"
+#include "physics.h"
 
 typedef enum VillagerState {
         VILLAGER_IDLE = 0,
         VILLAGER_HELD,
+	VILLAGER_THROWN,
         VILLAGER_WALKING_TO_TARGET,
         VILLAGER_WORKING
 } VillagerState;
@@ -60,17 +62,15 @@ typedef struct WorldObject {
 } WorldObject;
 
 typedef struct Villager {
-        float x;
-        float y;
-        float z;
-
-        float size_x;
-        float size_y;
-        float size_z;
+	PhysicsBody body;
 
         float target_x;
         float target_y;
         float target_z;
+
+	float velocity_x; 
+	float velocity_y; 
+	float velocity_z; 
 
         float move_speed;
 
@@ -122,6 +122,12 @@ typedef struct GameState {
 
 	float held_offset_x;
         float held_offset_y;
+
+	float held_prev_x;
+	float held_prev_y;
+	float held_throw_vx;
+	float held_throw_vy;
+	float held_has_prev_position;
 
         WorkSite work_sites[MAX_WORK_SITES];
         int work_site_count;

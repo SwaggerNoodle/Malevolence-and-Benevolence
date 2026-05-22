@@ -4,17 +4,26 @@
 #include "game.h"
 #include "rendering.h"
 #include "helpers.h"
-
+#include "physics.h"
 
 
 static void initVillager(Villager *villager, float x, float y){
-	villager->x = x;
-	villager->y = y;
-	villager->z = 0.5f;
+	villager->body.x = x;
+	villager->body.y = y;
+	villager->body.z = 0.5f;
 
-	villager->size_x = 0.8f;
-	villager->size_y = 0.8f;
-	villager->size_z = 1.0f;
+	villager->body.size_x = 0.8f;
+	villager->body.size_y = 0.8f;
+	villager->body.size_z = 1.0f;
+
+	villager->body.vx = 0.0f;
+	villager->body.vy = 0.0f;
+	villager->body.vz = 0.0f;
+
+	villager->body.mass = 1.0f;
+	villager->body.inv_mass = 1.0f;
+	villager->body.active = true;
+	villager->body.on_ground = true;
 
 	villager->target_x = x;
 	villager->target_y = y;
@@ -142,9 +151,9 @@ static int findClickedVillager(GameState *game, int mouse_x, int mouse_y){
 			continue;
 		}
 		if (!projectWorldToScreen(game,
-					  game->villagers[i].x,
-					  game->villagers[i].y,
-					  game->villagers[i].z,
+					  game->villagers[i].body.x,
+					  game->villagers[i].body.y,
+					  game->villagers[i].body.z,
 					  &sx, &sy)){
 			continue;
 		}
@@ -222,7 +231,7 @@ static void assignVillagerToSite(GameState *game, int villager_index, int site_i
 
 	villager->target_site_index = site_index;
 	villager->work_timer = 0.0f;
-	villager->z = 0.5f;
+	villager->body.z = 0.5f;
 	villager->state = VILLAGER_WALKING_TO_TARGET;
 
 	switch (site->type){
@@ -240,23 +249,23 @@ static void assignVillagerToSite(GameState *game, int villager_index, int site_i
 
 static void updateWalkingVillager(GameState *game, Villager *villager){
 	
-	float dx = villager->target_x - villager->x;
-	float dy = villager->target_y - villager->y;
+	float dx = villager->target_x - villager->body.x;
+	float dy = villager->target_y - villager->body.y;
 	float dist = sqrtf(dx * dx + dy * dy);
 
-	villager->z = 0.5f;
+	villager->body.z = 0.5f;
 
 	if (dist > 0.05f){
 		float nx = dx / dist;
 		float ny = dy / dist;
 
-		villager->x += nx * villager->move_speed * game->delta;
-		villager->y += ny * villager->move_speed * game->delta;
+		villager->body.x += nx * villager->move_speed * game->delta;
+		villager->body.y += ny * villager->move_speed * game->delta;
 	}
 	else {
-		villager->x = villager->target_x;
-		villager->y = villager->target_y;
-		villager->z = 0.5f;
+		villager->body.x = villager->target_x;
+		villager->body.y = villager->target_y;
+		villager->body.z = 0.5f;
 		villager->state = VILLAGER_WORKING;
 		villager->work_timer = 0.0f;
 	}
@@ -269,7 +278,7 @@ static void updateWorkingVillager(GameState *game, Villager *villager){
 		villager->state = VILLAGER_IDLE;
 		villager->job = JOB_NONE;
 		villager->target_site_index = -1;
-		villager->z = 0.5f;
+		villager->body.z = 0.5f;
 		return;
 	}
 	site = &game->work_sites[villager->target_site_index];
@@ -277,7 +286,7 @@ static void updateWorkingVillager(GameState *game, Villager *villager){
 		villager->state = VILLAGER_IDLE;
 		villager->job = JOB_NONE;
 		villager->target_site_index = -1;
-		villager->z = 0.5f;
+		villager->body.z = 0.5f;
 		return;
 	}
 	switch (villager->job){
@@ -286,9 +295,9 @@ static void updateWorkingVillager(GameState *game, Villager *villager){
 		default: work_cycle = 2.0f; break;
 	}
 	
-	villager->x = villager->target_x;
-	villager->y = villager->target_y;
-	villager->z = 0.5f + 0.05f * sinf(villager->work_timer * 8.0f);
+	villager->body.x = villager->target_x;
+	villager->body.y = villager->target_y;
+	villager->body.z = 0.5f + 0.05f * sinf(villager->work_timer * 8.0f);
 	
 	villager->work_timer += game->delta;
 	site->work_progress += game->delta;
@@ -316,19 +325,34 @@ static void updateHeldVillager(GameState *game){
 	
 	float mouse_world_x;
 	float mouse_world_y;
+	bool got_mouse_world = false;
 
-	float villager_held_height = 1.5f;
+	float instant_vx;
+	float instant_vy;
+	float smoothing;
+
+	float throw_vx;
+	float throw_vy;
+	float throw_speed;
+	float throw_scale;
+
+	const float villager_held_height = 1.5f;
+	const float throw_strength = 1.0f;
+	const float max_throw_speed = 18.0f;
+	
 
 	if (game->held_villager_index < 0 || game->held_villager_index >= game->villager_count){
 		game->held_villager_index = -1;
+		game->held_has_prev_position = false;
 		return;
 	}
 
 	villager = &game->villagers[game->held_villager_index];
+
 	villager->state = VILLAGER_HELD;
 	villager->job = JOB_NONE;
 	villager->target_site_index = -1;
-	villager->z = villager_held_height;
+	villager->body.z = villager_held_height;
 
 	if (Helper_mouseToWorldOnZPlane(game,
 					game->input.mouse_x,
@@ -336,22 +360,80 @@ static void updateHeldVillager(GameState *game){
 					villager_held_height,
 					&mouse_world_x,
 					&mouse_world_y)){
-		villager->x = mouse_world_x;
-		villager->y = mouse_world_y;
+		got_mouse_world = true;
+		
+		villager->body.x = mouse_world_x;
+		villager->body.y = mouse_world_y;
 	}
 
+	if (got_mouse_world){
+		if (game->held_has_prev_position && game->delta > 0.0001f){
+			instant_vx = (mouse_world_x - game->held_prev_x) / game->delta;
+			instant_vy = (mouse_world_y - game->held_prev_y) / game->delta;
+
+			smoothing = 0.35f;
+
+			game->held_throw_vx = game->held_throw_vx * (1.0f - smoothing) + instant_vx * smoothing;
+			game->held_throw_vy = game->held_throw_vy * (1.0f - smoothing) + instant_vy * smoothing;
+		}
+		else {
+			game->held_throw_vx = 0.0f;
+			game->held_throw_vy = 0.0f;
+			game->held_has_prev_position = true;
+		}
+		game->held_prev_x = mouse_world_x;
+		game->held_prev_y = mouse_world_y;
+	}
 	if (game->input.mouse_left_released){
 		site_index = findWorkSiteAtScreenPos(game, game->input.mouse_x, game->input.mouse_y);
+
 		if (site_index >= 0){
+			villager->body.vx = 0.0f;
+			villager->body.vy = 0.0f;
+			villager->body.vz = 0.0f;
+			villager->body.on_ground = true;
+
 			assignVillagerToSite(game, game->held_villager_index, site_index);
 		}
 		else {
-			villager->state = VILLAGER_IDLE;
+			villager->state = VILLAGER_THROWN;
 			villager->job = JOB_NONE;
 			villager->target_site_index = -1;
-			villager->z = 0.5f;
+
+			throw_vx = game->held_throw_vx * throw_strength;
+			throw_vy = game->held_throw_vy * throw_strength;
+
+			throw_speed = sqrtf(throw_vx * throw_vx + throw_vy * throw_vy);
+
+			if (throw_speed > max_throw_speed){
+				throw_scale = max_throw_speed / throw_speed;
+				throw_vx *= throw_scale;
+				throw_vy *= throw_scale;
+			}
+
+			villager->body.vx = throw_vx;
+			villager->body.vy = throw_vy;
+			villager->body.vz = 8.0f;
+			villager->body.on_ground = false;
 		}
+
 		game->held_villager_index = -1;
+		game->held_has_prev_position = false;
+		game->held_throw_vx = 0.0f;
+		game->held_throw_vy = 0.0f;
+	}
+}
+static void updateThrownVillager(GameState *game, Villager *villager){
+	Physics_applyGravity(&villager->body, game->delta);
+	Physics_integrate(&villager->body, game->delta);
+	Physics_resolveGroundCollision(&villager->body);
+
+	if (villager->body.on_ground &&
+	    fabsf(villager->body.vx) < 0.05f &&
+	    fabsf(villager->body.vy) < 0.05f &&
+	    fabsf(villager->body.vz) < 0.05f){
+
+	    villager->state = VILLAGER_IDLE;
 	}
 }
 static void updateVillagers(GameState *game){
@@ -373,7 +455,7 @@ static void updateVillagers(GameState *game){
 		
 		switch (villager->state){
 			case VILLAGER_IDLE:
-				villager->z = 0.5f;
+				villager->body.z = 0.5f;
 				break;
 			case VILLAGER_HELD:
 				break;
@@ -382,6 +464,9 @@ static void updateVillagers(GameState *game){
 				break;
 			case VILLAGER_WORKING:
 				updateWorkingVillager(game, villager);
+				break;
+			case VILLAGER_THROWN:
+				updateThrownVillager(game, villager);
 				break;
 		}
 	}
@@ -493,7 +578,7 @@ static void update(GameState *game){
 			villager->job = JOB_NONE;
 			villager->target_site_index = -1;
 
-			villager->z = villager_held_height;
+			villager->body.z = villager_held_height;
 
 			if (Helper_mouseToWorldOnZPlane(game,
 							game->input.mouse_x,
@@ -501,12 +586,23 @@ static void update(GameState *game){
 							villager_held_height,
 							&mouse_world_x,
 							&mouse_world_y)){
-				villager->x = mouse_world_x;
-				villager->y = mouse_world_y;
+				villager->body.x = mouse_world_x;
+				villager->body.y = mouse_world_y;
 			}
 			game->held_offset_x = 0.0f;
 			game->held_offset_y = 0.0f;
 			
+			game->held_prev_x = villager->body.x;
+			game->held_prev_y = villager->body.y;
+			game->held_throw_vx = 0.0f;
+			game->held_throw_vy = 0.0f;
+			game->held_has_prev_position = true;
+
+			villager->body.vx = 0.0f;
+			villager->body.vy = 0.0f;
+			villager->body.vz = 0.0f;
+			villager->body.on_ground = false;
+
 			game->input.mouse_delta_x = 0;
 			game->input.mouse_delta_y = 0;
 		}
